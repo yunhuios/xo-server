@@ -825,7 +825,12 @@ handleVmImport = $coroutine (req, res, { xapi, srId }) ->
     return
 
   try
-    vm = yield xapi.importVm(req, contentLength, { srId })
+    promise = xapi.importVm(req, contentLength)
+    res.on('close', () ->
+      promise.cancel()
+    )
+    vm = yield promise
+
     res.end(format.response(0, vm.$id))
   catch e
     res.writeHead(500)

@@ -58,6 +58,25 @@ export function autobind (target, key, {
 
 // -------------------------------------------------------------------
 
+export const cancellable = (target, name, { value: fn, ...attributes }) => {
+  function newFn (...args) {
+    let resolve
+    const cancellation = new Promise(resolve_ => {
+      resolve = resolve_
+    })
+
+    const promise = fn.call(this, cancellation, ...args)
+
+    promise.cancel = resolve
+
+    return promise
+  }
+
+  return { value: newFn, ...attributes }
+}
+
+// -------------------------------------------------------------------
+
 // Debounce decorator for methods.
 //
 // See: https://github.com/wycats/javascript-decorators
