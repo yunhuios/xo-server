@@ -1,21 +1,82 @@
 #!/usr/bin/env node
 
-import execPromise from 'exec-promise'
+var info = require('./log').info('bootstrap')
+var warn = require('./log').warning('bootstrap')
 
-import createWorkerFarm from './workers'
+process.on('unhandledRejection', reason => {
+  warn('possibly unhandled rejection', reason)
+})
 
-// ===================================================================
+;(({ prototype }) => {
+  const { emit } = prototype
+  prototype.emit = function (event, error) {
+    (event === 'error' && !this.listenerCount(event))
+      ? warn('unhandled error event', error)
+      : emit.apply(this, arguments)
+  }
+})(require('events').EventEmitter)
+
+const Bluebird = require('bluebird')
+Bluebird.longStackTraces()
+global.Promise = Bluebird
 
 // -------------------------------------------------------------------
 
-execPromise(async args => {
-  const farm = createWorkerFarm()
+const loadConfig = require('app-conf').load
+const map = require('lodash/map')
+const readFile = Bluebird.promisify(require('fs').readFile)
+const WebServer = require('http-server-plus')
 
-  console.time('foo')
-  await Promise.all([
-    farm.call({ method: 'sleep', arg: 25e2 }).then(() => console.log('foo')),
-    farm.call({ method: 'sleep', arg: 25e2 }).then(() => console.log('bar')),
-    farm.call({ method: 'sleep', arg: 25e2 }).then(() => console.log('baz'))
-  ])
-  console.timeEnd('foo')
+;(async args => {
+  const config = await loadConfig('xo-server')
+
+  const webServer = new WebServer()
+  await Promise.all(map(
+    config.http.listen,
+    async ({
+      certificate,
+
+      // The properties was called `certificate` before.
+      cert = certificate,
+
+      key,
+      ...opts
+    }) => {
+      if (cert && key) {
+        [ opts.cert, opts.key ] = await Promise.all([
+          readFile(cert),
+          readFile(key)
+        ])
+      }
+
+      try {
+        const niceAddress = await webServer.listen(opts)
+        info(`Web server listening on ${niceAddress}`)
+      } catch (error) {
+        if (error.niceAddress) {
+          warn(`Web server could not listen on ${error.niceAddress}`)
+
+          const { code } = error
+          if (code === 'EACCES') {
+            warn('  Access denied.')
+            warn('  Ports < 1024 are often reserved to privileges users.')
+          } else if (code === 'EADDRINUSE') {
+            warn('  Address already in use.')
+          }
+        } else {
+          warn('Web server could not listen', error)
+        }
+      }
+    }
+  ))
+
+  try {
+    const { group, user } = config
+    group != null && process.setgid(group)
+    user != null && process.setuid(user)
+  } catch (error) {
+    warn('failed to change group/user', error)
+  }
+})(process.argv.slice(2)).catch(error => {
+  warn('fatal error', error)
 })
