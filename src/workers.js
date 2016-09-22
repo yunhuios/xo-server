@@ -4,45 +4,28 @@ import { fork } from 'child_process'
 const MAX = getCpus().length
 const WORKER = `${__dirname}/worker.js`
 
-// Starts the autoincrement id with the JavaScript minimal safe integer to have
-// more room before running out of integers (it's very far fetched but a very
-// long running process with a LOT of messages could run out).
-let nextId = -9007199254740991
-const getFreeId = object => {
-  let id
-  do {
-    id = String(nextId++)
-  } while (id in object)
-  return id
-}
-
 class Task {
-  constructor (id, method, arg) {
-    this.id = id
-    this.method = method
-    this.arg = arg
+  constructor (data, resolve, reject) {
+    this.data = data
+    this.resolve = resolve
+    this.reject = reject
   }
 }
 
 class Farm {
   constructor () {
-    this._deferreds = {}
     this._nWorkers = 0
     this._tasksQueue = []
     this._idleWorker = null
   }
 
-  call (method, arg) {
+  call (data) {
     return new Promise((resolve, reject) => {
-      const deferreds = this._deferreds
-
-      const id = getFreeId(deferreds)
-      const task = new Task(id, method, arg)
-      deferreds[id] = { resolve, reject }
+      const task = new Task(data, resolve, reject)
 
       const worker = this._getWorker()
       if (worker) {
-        worker.send(task)
+        this._submitTask(worker, task)
       } else {
         this._tasksQueue.push(task)
       }
@@ -67,31 +50,30 @@ class Farm {
         console.log('worker exit', code, signal)
         this._nWorkers--
       })
-      worker.on('message', ({ id, error, result }) => {
-        const task = this._tasksQueue.shift()
-        if (task) {
-          worker.send(task)
-        } else if (this._idleWorker) {
-          worker.kill()
-        } else {
-          this._idleWorker = worker
-        }
-
-        const deferreds = this._deferreds
-
-        const deferred = deferreds[id]
-        if (!deferred) {
-          throw new Error(`no deferred available for ${id}`)
-        }
-        delete deferreds[id]
-
-        error
-          ? deferred.reject(error)
-          : deferred.resolve(result)
-      })
 
       return worker
     }
+  }
+
+  _submitTask (worker, task) {
+    worker.once('message', response => {
+      if ('error' in response) {
+        task.reject(response.error)
+      } else {
+        task.resolve(response.result)
+      }
+
+      const nextTask = this._tasksQueue.shift()
+      if (nextTask) {
+        this._submitTask(worker, nextTask)
+      } else if (this._idleWorker) {
+        worker.kill()
+      } else {
+        this._idleWorker = worker
+      }
+    })
+
+    worker.send(task.data)
   }
 }
 

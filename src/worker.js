@@ -3,17 +3,17 @@ const METHODS = {
   sleep: duration => new Promise(resolve => setTimeout(resolve, duration))
 }
 
-process.on('message', ({ id, method, arg }) => {
+process.on('message', ({ method, arg }) => {
   const fn = METHODS[method]
   if (!fn) {
     return process.send(new Error('no such method'))
   }
 
   new Promise(resolve => resolve(fn(arg))).then(
-    result => process.send({ id, result }),
+    result => process.send({ result }),
     error => {
       console.error(error)
-      process.send({ id, error })
+      process.send({ error })
     }
   ).catch(error => {
     console.error('worker error', error)
