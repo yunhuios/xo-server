@@ -13,9 +13,9 @@ execPromise(async args => {
 
   console.time('foo')
   await Promise.all([
-    farm.call('sleep', 25e2).then(() => console.log('foo')),
-    farm.call('sleep', 25e2).then(() => console.log('bar')),
-    farm.call('sleep', 25e2).then(() => console.log('baz'))
+    farm.call({ method: 'sleep', arg: 25e2 }).then(() => console.log('foo')),
+    farm.call({ method: 'sleep', arg: 25e2 }).then(() => console.log('bar')),
+    farm.call({ method: 'sleep', arg: 25e2 }).then(() => console.log('baz'))
   ])
   console.timeEnd('foo')
 })
