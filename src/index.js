@@ -22,16 +22,13 @@ global.Promise = Bluebird
 
 // -------------------------------------------------------------------
 
-const loadConfig = require('app-conf').load
-const map = require('lodash/map')
-const readFile = Bluebird.promisify(require('fs').readFile)
-const WebServer = require('http-server-plus')
-
 ;(async args => {
-  const config = await loadConfig('xo-server')
+  const config = await require('app-conf').load('xo-server')
 
-  const webServer = new WebServer()
-  await Promise.all(map(
+  const webServer = new (require('http-server-plus'))()
+
+  const readFile = Bluebird.promisify(require('fs').readFile)
+  await Promise.all(require('lodash/map')(
     config.http.listen,
     async ({
       certificate,
