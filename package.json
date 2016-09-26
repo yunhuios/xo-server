@@ -32,7 +32,7 @@
     "bluebird": "^3.4.6",
     "event-to-promise": "^0.7.0",
     "http-request-plus": "0.0.0",
-    "http-server-plus": "^0.6.4",
+    "http-server-plus": "^0.7.0",
     "index-modules": "0.0.0",
     "lodash": "^4.16.1",
     "promise-toolbox": "^0.5.1",
