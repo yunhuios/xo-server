@@ -83,13 +83,6 @@ global.Promise = Bluebird
   })
   await app.start()
 
-  // Gracefully shutdown when no more work.
-  //
-  // See http://devdocs.io/node~4_lts/process#process_event_beforeexit
-  process.on('beforeExit', () => {
-    app.stop()
-  })
-
   // Gracefully shutdown on signals.
   //
   // TODO: implements a timeout? (or maybe it is the services launcher
