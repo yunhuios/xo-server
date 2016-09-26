@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
-var info = require('./log').info('bootstrap')
-var warn = require('./log').warning('bootstrap')
+const info = require('log').info('bootstrap')
+const warn = require('log').warning('bootstrap')
 
 process.on('unhandledRejection', reason => {
   warn('possibly unhandled rejection', reason)
@@ -74,6 +74,27 @@ global.Promise = Bluebird
   } catch (error) {
     warn('failed to change group/user', error)
   }
+
+  const app = new (require('./app').default)({ // eslint-disable-line new-cap
+    config,
+    webServer
+  })
+  await app.start()
+
+  // Gracefully shutdown on signals.
+  //
+  // TODO: implements a timeout? (or maybe it is the services launcher
+  // responsibility?)
+  require('lodash/forEach')([ 'SIGINT', 'SIGTERM' ], signal => {
+    process.on(signal, () => {
+      info(`${signal} caught, closing…`)
+      app.stop()
+    })
+  })
+
+  await (require('event-to-promise'))(app, 'stopped')
+
+  info('bye :-)')
 })(process.argv.slice(2)).catch(error => {
   warn('fatal error', error)
 })
