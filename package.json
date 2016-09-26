@@ -33,6 +33,7 @@
     "event-to-promise": "^0.7.0",
     "http-request-plus": "0.0.0",
     "http-server-plus": "^0.6.4",
+    "index-modules": "0.0.0",
     "lodash": "^4.16.1",
     "promise-toolbox": "^0.5.1",
     "spdy": "^3.4.2"
@@ -51,9 +52,10 @@
     "standard": "^8.1.0"
   },
   "scripts": {
-    "build": "NODE_ENV=production babel --source-maps --out-dir=dist/ src/",
+    "build": "npm run index-modules && NODE_ENV=production babel --source-maps --out-dir=dist/ src/",
     "depcheck": "dependency-check ./package.json",
-    "dev": "NODE_ENV=development babel --watch --source-maps --out-dir=dist/ src/",
+    "dev": "npm run index-modules && NODE_ENV=development babel --watch --source-maps --out-dir=dist/ src/",
+    "index-modules": "index-modules --auto src/",
     "lint": "standard",
     "posttest": "npm run lint && npm run depcheck",
     "prepublish": "npm run build",

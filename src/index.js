@@ -23,6 +23,8 @@ global.Promise = Bluebird
 // -------------------------------------------------------------------
 
 ;(async args => {
+  info('starting')
+
   const config = await require('app-conf').load('xo-server')
 
   const webServer = new (require('http-server-plus'))()
@@ -81,6 +83,13 @@ global.Promise = Bluebird
   })
   await app.start()
 
+  // Gracefully shutdown when no more work.
+  //
+  // See http://devdocs.io/node~4_lts/process#process_event_beforeexit
+  process.on('beforeExit', () => {
+    app.stop()
+  })
+
   // Gracefully shutdown on signals.
   //
   // TODO: implements a timeout? (or maybe it is the services launcher
@@ -92,9 +101,8 @@ global.Promise = Bluebird
     })
   })
 
-  await (require('event-to-promise'))(app, 'stopped')
-
-  info('bye :-)')
-})(process.argv.slice(2)).catch(error => {
-  warn('fatal error', error)
-})
+  return require('event-to-promise')(app, 'stopped')
+})(process.argv.slice(2)).then(
+  () => info('bye :-)'),
+  error => warn('fatal error', error)
+)
