@@ -95,7 +95,15 @@ global.Promise = Bluebird
   // TODO: implements a timeout? (or maybe it is the services launcher
   // responsibility?)
   require('lodash/forEach')([ 'SIGINT', 'SIGTERM' ], signal => {
+    let alreadyCalled = false
+
     process.on(signal, () => {
+      if (alreadyCalled) {
+        warn('forced exit')
+        process.exit(1)
+      }
+      alreadyCalled = true
+
       info(`${signal} caught, closing…`)
       app.stop()
     })
