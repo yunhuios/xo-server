@@ -2,7 +2,7 @@ import { cpus as getCpus } from 'os'
 import { fork } from 'child_process'
 
 const MAX = getCpus().length
-const WORKER = `${__dirname}/worker.js`
+const WORKER = `${__dirname}/../../worker.js`
 
 class Task {
   constructor (data, resolve, reject) {
@@ -12,14 +12,14 @@ class Task {
   }
 }
 
-export default class Farm {
+export default class Workers {
   constructor () {
     this._nWorkers = 0
     this._tasksQueue = []
     this._idleWorker = null
   }
 
-  call (data) {
+  callWorker (data) {
     return new Promise((resolve, reject) => {
       const task = new Task(data, resolve, reject)
 
