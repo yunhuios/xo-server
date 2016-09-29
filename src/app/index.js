@@ -1,6 +1,6 @@
 import mixin from 'mixin'
-import values from 'lodash/values'
 import { EventEmitter } from 'events'
+import { values } from 'lodash'
 
 import Mixins from './mixins'
 

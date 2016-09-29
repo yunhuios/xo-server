@@ -1,5 +1,5 @@
 import emitAsync from 'emit-async'
-import mapValues from 'lodash/mapValues'
+import { mapValues } from 'lodash'
 
 export default mapValues({
   start: 'started',
