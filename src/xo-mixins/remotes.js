@@ -1,6 +1,4 @@
-import RemoteHandlerLocal from '../remote-handlers/local'
-import RemoteHandlerNfs from '../remote-handlers/nfs'
-import RemoteHandlerSmb from '../remote-handlers/smb'
+import {RemoteHandlerLocal, RemoteHandlerNfs, RemoteHandlerSmb} from '@nraynaud/xo-fs'
 import {
   forEach
 } from '../utils'
