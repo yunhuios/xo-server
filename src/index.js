@@ -1,7 +1,6 @@
 #!/usr/bin/env node
 
-const info = require('log').info('bootstrap')
-const warn = require('log').warning('bootstrap')
+const { info, warning: warn } = require('log')('bootstrap')
 
 process.on('unhandledRejection', reason => {
   warn('possibly unhandled rejection', reason)
@@ -79,6 +78,7 @@ global.Promise = Bluebird
 
   const app = new (require('./app').default)({ // eslint-disable-line new-cap
     config,
+    safeMode: require('lodash/include')(args, '--safe-mode'),
     webServer
   })
   await app.start()
