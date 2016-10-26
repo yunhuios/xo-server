@@ -42,21 +42,20 @@ export class Store {
   }
 
   async createObject (props) {
-    const { id, type } = props
+    const { type } = props
     if (__DEV__ && !type) {
       throw new Error('missing type')
     }
 
     const db = await this._get()
     const byType = db.byType || (db.byType = {})
-    const collection = byType[type] || (byType = {})
+    const collection = byType[type] || (byType[type] = {})
 
+    let { id } = props
     if (!id) {
       props.id = id = generateUuid()
     }
 
     collection[id] = props
   }
-
-  patch (patch)
 }

@@ -2,14 +2,19 @@
   "private": true,
   "name": "xo-server",
   "version": "0.0.0",
-  "license": "ISC",
-  "description": "",
-  "keywords": [],
-  "homepage": "",
-  "bugs": "",
+  "license": "AGPL-3.0",
+  "description": "Server part of Xen Orchestra",
+  "keywords": [
+    "orchestra",
+    "server",
+    "xen",
+    "xen-orchestra"
+  ],
+  "homepage": "https://github.com/vatesfr/xo-server/",
+  "bugs": "https://github.com/vatesfr/xo-web/issues",
   "repository": {
     "type": "git",
-    "url": ""
+    "url": "https://github.com/vatesfr/xo-server.git"
   },
   "author": {
     "name": "Julien Fontanet",
@@ -24,7 +29,7 @@
     "dist/"
   ],
   "engines": {
-    "node": ">=0.12"
+    "node": ">=4"
   },
   "dependencies": {
     "app-conf": "^0.4.0",
@@ -37,7 +42,7 @@
     "immutable": "^3.8.1",
     "index-modules": "0.1.0",
     "lodash": "^4.16.1",
-    "promise-toolbox": "^0.6.0",
+    "promise-toolbox": "^0.7.0",
     "rxjs": "^5.0.0-beta.12",
     "spdy": "^3.4.2",
     "uuid": "^2.0.3"
@@ -61,11 +66,13 @@
     "build": "npm run index-modules && NODE_ENV=production babel --source-maps --out-dir=dist/ src/",
     "depcheck": "dependency-check ./package.json",
     "dev": "npm run index-modules && NODE_ENV=development babel --watch --source-maps --out-dir=dist/ src/",
+    "dev-test": "jest --watch",
     "index-modules": "index-modules --auto src/",
     "lint": "standard",
-    "posttest": "npm run lint && npm run depcheck",
+    "posttest": "npm run lint",
     "prepublish": "npm run build",
-    "start": "node dist/index.js"
+    "start": "node dist/index.js",
+    "test": "jest"
   },
   "babel": {
     "env": {
@@ -86,15 +93,18 @@
       "stage-0"
     ]
   },
+  "config": {
+    "ghooks": {
+      "commit-msg": "npm test"
+    }
+  },
+  "jest": {
+    "testPathIgnorePatterns": ["<rootDir>/node_modules"]
+  },
   "standard": {
     "ignore": [
       "dist"
     ],
     "parser": "babel-eslint"
-  },
-  "config": {
-    "ghooks": {
-      "commit-msg": "npm test"
-    }
   }
 }

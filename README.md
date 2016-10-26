@@ -1,18 +1,20 @@
-# ${pkg.name} [![Build Status](https://travis-ci.org/${pkg.shortGitHubPath}.png?branch=master)](https://travis-ci.org/${pkg.shortGitHubPath})
+# xo-server [![Build Status](https://travis-ci.org/vatesfr/xo-server.png?branch=master)](https://travis-ci.org/vatesfr/xo-server)
 
-> ${pkg.description}
+> Server part of [Xen Orchestra](https://xen-orchestra.com)
 
 ## Install
 
-Installation of the [npm package](https://npmjs.org/package/${pkg.name}):
+Installation of the [npm package](https://npmjs.org/package/xo-server):
 
 ```
-> npm install --save ${pkg.name}
+> npm install --global xo-server
 ```
 
 ## Usage
 
-**TODO**
+```
+> xo-server
+```
 
 ## Development
 
@@ -43,10 +45,10 @@ the code.
 
 You may:
 
-- report any [issue](${pkg.bugs})
+- report any [issue](https://github.com/vatesfr/xo-web/issues)
   you've encountered;
 - fork and create a pull request.
 
 ## License
 
-${pkg.license} © [${pkg.author.name}](${pkg.author.url})
+AGPL3 © [Vates SAS](http://vates.fr)
