@@ -76,6 +76,8 @@ global.Promise = Bluebird
     warn('failed to change group/user', error)
   }
 
+  global.Observable = require('zen-observable')
+
   const app = new (require('./app').default)({ // eslint-disable-line new-cap
     config,
     safeMode: require('lodash/include')(args, '--safe-mode'),

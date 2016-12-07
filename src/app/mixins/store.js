@@ -1,8 +1,8 @@
+import generateId from 'cuid'
 import mkdirp from 'simple-mkdirp'
 import { catchPlus, tap } from 'promise-toolbox'
 import { join } from 'path'
 import { readFile, writeFile } from 'fs-promise'
-import { v4 as generateUuid } from 'uuid'
 
 const __DEV__ = process.env.NODE_ENV !== 'production'
 
@@ -41,8 +41,7 @@ export class Store {
     types[name] = spec
   }
 
-  async createObject (props) {
-    const { type } = props
+  async createObject ({ type, ...props }) {
     if (__DEV__ && !type) {
       throw new Error('missing type')
     }
@@ -53,7 +52,7 @@ export class Store {
 
     let { id } = props
     if (!id) {
-      props.id = id = generateUuid()
+      props.id = id = generateId()
     }
 
     collection[id] = props
