@@ -51,6 +51,7 @@ const parseVmBackupPath = name => {
   if (baseMatches) {
     return {
       datetime: safeDateParse(baseMatches[1]),
+      id: name,
       name: baseMatches[3],
       tag: baseMatches[2],
       type: 'xva'
@@ -64,10 +65,11 @@ const parseVmBackupPath = name => {
   ) {
     return {
       datetime: safeDateParse(baseMatches[1]),
+      id: name,
       name: baseMatches[2],
-      uuid: dirMatches[2],
       tag: dirMatches[1],
-      type: 'delta'
+      type: 'delta',
+      uuid: dirMatches[2]
     }
   }
 
@@ -137,6 +139,28 @@ export default class {
         }
       ))
     }
+
+    return backups
+  }
+
+  async listVmBackups (remoteId) {
+    const handler = await this._xo.getRemoteHandler(remoteId)
+
+    const backups = []
+
+    await Promise.all(mapToArray(await handler.list(), entry => {
+      if (endsWith(entry, '.xva')) {
+        backups.push(parseVmBackupPath(entry))
+      } else if (startsWith(entry, 'vm_delta_')) {
+        return handler.list(entry).then(children => {
+          forEach(children, child => {
+            if (endsWith(child, '.json')) {
+              backups.push(parseVmBackupPath(`${entry}/${child}`))
+            }
+          })
+        })
+      }
+    }))
 
     return backups
   }
