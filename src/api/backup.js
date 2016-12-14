@@ -1,3 +1,7 @@
+import { basename } from 'path'
+
+// ===================================================================
+
 export function list ({ remote }) {
   return this.listVmBackups(remote)
 }
@@ -10,16 +14,7 @@ list.params = {
 // -------------------------------------------------------------------
 
 export function scanDisk ({ remote, disk }) {
-  return {
-    partitions: [
-      {
-        id: '90def144-9e70-4565-b62f-a048b8e3dad5',
-        name: 'root',
-        type: 'linux',
-        size: 5905580032
-      }
-    ]
-  }
+  return this.scanDiskBackup(remote, disk)
 }
 
 scanDisk.permission = 'admin'
@@ -31,34 +26,7 @@ scanDisk.params = {
 // -------------------------------------------------------------------
 
 export function scanFiles ({ remote, disk, partition, path }) {
-  return {
-    'bin/': {},
-    'boot/': {},
-    'dev/': {},
-    'etc/': {},
-    'home/': {},
-    'initrd.img': {},
-    'initrd.img.old': {},
-    'lib/': {},
-    'lib32/': {},
-    'lib64/': {},
-    'libx32/': {},
-    'lost+found/': {},
-    'media/': {},
-    'mnt/': {},
-    'opt/': {},
-    'proc/': {},
-    'root/': {},
-    'run/': {},
-    'sbin/': {},
-    'srv/': {},
-    'sys/': {},
-    'tmp/': {},
-    'usr/': {},
-    'var/': {},
-    'vmlinuz': {},
-    'vmlinuz.old': {}
-  }
+  return this.scanFilesInDiskBackup(remote, disk, partition, path)
 }
 
 scanFiles.permission = 'admin'
@@ -71,8 +39,15 @@ scanFiles.params = {
 
 // -------------------------------------------------------------------
 
-export function fetchFiles ({ remote, disk, partition, paths }) {
-  return this.registerHttpRequest().then(url => ({ $getFrom: url }))
+const handleFetchFiles = (req, res, { remote, disk, partition, paths }) =>
+  this.fetchFilesInDiskBackup(remote, disk, partition, paths).then(files => {
+    files[0].pipe(res)
+  })
+
+export async function fetchFiles (params) {
+  return this.registerHttpRequest(handleFetchFiles, params, {
+    suffix: `/${basename(params.paths[0])}`
+  }).then(url => ({ $getFrom: url }))
 }
 
 fetchFiles.permission = 'admin'

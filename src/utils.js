@@ -12,7 +12,9 @@ import keys from 'lodash/keys'
 import kindOf from 'kindof'
 import multiKeyHashInt from 'multikey-hash'
 import pick from 'lodash/pick'
+import tmp from 'tmp'
 import xml2js from 'xml2js'
+import { resolve } from 'path'
 
 // Moment timezone can be loaded only one time, it's a workaround to load
 // the latest version because cron module uses an old version of moment which
@@ -26,6 +28,7 @@ import { utcFormat, utcParse } from 'd3-time-format'
 import {
   all as pAll,
   defer,
+  fromCallback,
   promisify,
   reflect as pReflect
 } from 'promise-toolbox'
@@ -460,6 +463,11 @@ export const multiKeyHash = (...args) => new Promise(resolve => {
 
 // -------------------------------------------------------------------
 
+export const resolveSubpath = (root, path) =>
+  resolve(root, `./${resolve('/', path)}`)
+
+// -------------------------------------------------------------------
+
 export const streamToArray = (stream, {
   filter,
   mapper
@@ -531,7 +539,7 @@ export const thunkToArray = thunk => {
 // ```js
 // promise.catch(throwFn('an error has occured'))
 //
-// function foo (param = throwFn('param is required')) {}
+// function foo (param = throwFn('param is required')()) {}
 // ```
 export const throwFn = error => () => {
   throw (
@@ -540,6 +548,10 @@ export const throwFn = error => () => {
       : error
   )
 }
+
+// -------------------------------------------------------------------
+
+export const tmpDir = () => fromCallback(cb => tmp.dir(cb))
 
 // -------------------------------------------------------------------
 

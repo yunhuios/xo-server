@@ -2,28 +2,36 @@ import deferrable from 'golike-defer'
 import endsWith from 'lodash/endsWith'
 import escapeStringRegexp from 'escape-string-regexp'
 import eventToPromise from 'event-to-promise'
+import execa from 'execa'
 import filter from 'lodash/filter'
 import find from 'lodash/find'
 import findIndex from 'lodash/findIndex'
 import sortBy from 'lodash/sortBy'
+import splitLines from 'split-lines'
 import startsWith from 'lodash/startsWith'
+import { createParser as createPairsParser } from 'parse-pairs'
+import { createReadStream, readdir } from 'fs'
+import { satisfies as versionSatisfies } from 'semver'
+import { utcFormat } from 'd3-time-format'
 import {
   basename,
   dirname
 } from 'path'
-import { satisfies as versionSatisfies } from 'semver'
-import { utcFormat } from 'd3-time-format'
 
 import vhdMerge, { chainVhd } from '../vhd-merge'
+import vhdMount from '../vhd-mount'
 import xapiObjectToXo from '../xapi-object-to-xo'
 import {
   forEach,
+  fromCallback,
   mapToArray,
   noop,
   pCatch,
   pSettle,
+  resolveSubpath,
   safeDateFormat,
-  safeDateParse
+  safeDateParse,
+  tmpDir
 } from '../utils'
 import {
   VDI_FORMAT_VHD
@@ -813,5 +821,66 @@ export default class {
       // Do not consider a failure to delete an old copy as a fatal error.
       targetXapi.deleteVm(vm.$id, true)::pCatch(noop)
     ))
+  }
+
+  // -----------------------------------------------------------------
+
+  _mountVhd (remoteId, diskPath) {
+    return Promise.all([
+      this._xo.getRemoteHandler(remoteId),
+      tmpDir()
+    ]).then(([ handler, mountDir ]) =>
+      vhdMount(mountDir, handler, diskPath).then(unmount =>
+        ({ unmount, mountDir })
+      )
+    )
+  }
+
+  @deferrable
+  async scanDiskBackup ($defer, remoteId, disk) {
+    const { unmount, mountDir } = await this._mountVhd(remoteId, disk)
+    $defer(unmount)
+
+    const { stdout } = await execa('partx', [
+      '--bytes',
+      '--output=NR,START,SIZE,NAME,UUID,TYPE',
+      '--pairs',
+      mountDir
+    ])
+
+    const parsePairs = createPairsParser({
+      keyTransform: key => key.toLowerCase(),
+      valueTransform: (value, key) => key === 'start' || key === 'size'
+        ? +value
+        : value
+    })
+
+    return {
+      partitions: mapToArray(splitLines(stdout), parsePairs)
+    }
+  }
+
+  @deferrable
+  async scanFilesInDiskBackup ($defer, remoteId, diskPath, partition, path) {
+    const { unmount, mountDir } = await this._mountVhd(remoteId, diskPath)
+    $defer(unmount)
+
+    return fromCallback(cb => readdir(resolveSubpath(mountDir, path)))
+  }
+
+  @deferrable
+  async fetchFilesInDiskBackup ($defer, remoteId, diskPath, partition, paths) {
+    const { unmount, mountDir } = await this._mountVhd(remoteId, diskPath)
+
+    let i = 0
+    const onEnd = () => {
+      if (!--i) {
+        unmount()
+      }
+    }
+    return mapToArray(paths, path => {
+      ++i
+      return createReadStream(resolveSubpath(mountDir, path)).once('end', onEnd)
+    })
   }
 }
