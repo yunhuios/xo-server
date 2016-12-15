@@ -445,7 +445,7 @@ export default class Vhd {
 
     // FIXME: we should read as many sector in a single pass as
     // possible for maximum perf.
-    const [ sector, offsetInSector ] = div(block, this._sectorsPerBlock)
+    const [ sector, offsetInSector ] = div(begin, SECTOR_SIZE)
     return this._readBlockSector(
       block,
       sector,
@@ -454,30 +454,6 @@ export default class Vhd {
       buf,
       offset
     )
-  }
-
-  async readSector (sector, buf, offset) {
-    const [ block, sectorInBlock ] = div(sector, this._sectorsPerBlock)
-
-    const blockAddr = this._getBlockAddress(block)
-    const parent = this._parent
-    if (blockAddr) {
-      const blockBitmapSize = this._blockBitmapSize
-
-      const bitmap = await this._read(blockAddr, blockBitmapSize)
-      if (testBit(bitmap, sectorInBlock)) {
-        return this._read(
-          blockAddr + blockBitmapSize + sectorInBlock * SECTOR_SIZE,
-          SECTOR_SIZE,
-          buf,
-          offset
-        )
-      }
-    } else if (!parent) {
-      return this._zeroes(SECTOR_SIZE, buf, offset)
-    }
-
-    return parent.readSector(sector, buf, offset)
   }
 
   read (buf, begin, length = buf.length) {
