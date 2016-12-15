@@ -906,7 +906,6 @@ export default class {
 
     const entriesMap = {}
     await Promise.all(mapToArray(entries, async name => {
-      console.log(`${path}/${name}`)
       const stats = await pFromCallback(cb => stat(`${path}/${name}`, cb))
       entriesMap[stats.isDirectory() ? `${name}/` : name] = {}
     }))
