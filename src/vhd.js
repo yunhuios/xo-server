@@ -443,7 +443,7 @@ export default class Vhd {
       return this._read(blockAddr + this._blockBitmapSize + begin, length, buf, offset)
     }
 
-    // FIXME: we should read as many sector in a single pass as
+    // FIXME: we should read as many sectors in a single pass as
     // possible for maximum perf.
     const [ sector, offsetInSector ] = div(begin, SECTOR_SIZE)
     return this._readBlockSector(

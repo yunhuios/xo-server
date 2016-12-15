@@ -4,7 +4,7 @@ import eventToPromise from 'event-to-promise'
 import execa from 'execa'
 import splitLines from 'split-lines'
 import { createParser as createPairsParser } from 'parse-pairs'
-import { createReadStream, readdir } from 'fs'
+import { createReadStream, readdir, stat } from 'fs'
 import { satisfies as versionSatisfies } from 'semver'
 import { utcFormat } from 'd3-time-format'
 import {
@@ -900,7 +900,17 @@ export default class {
     const partition = await this._mountPartition(remoteId, vhdPath, partitionId)
     $defer(partition.unmount)
 
-    return pFromCallback(cb => readdir(resolveSubpath(partition.path, path), cb))
+    path = resolveSubpath(partition.path, path)
+
+    const entries = await pFromCallback(cb => readdir(path, cb))
+
+    const entriesMap = {}
+    await Promise.all(mapToArray(entries, async name => {
+      console.log(`${path}/${name}`)
+      const stats = await pFromCallback(cb => stat(`${path}/${name}`, cb))
+      entriesMap[stats.isDirectory() ? `${name}/` : name] = {}
+    }))
+    return entriesMap
   }
 
   @deferrable
