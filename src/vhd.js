@@ -101,7 +101,6 @@ const uint32ToUint64 = fu => fu.high * SIZE_OF_32_BITS + fu.low
 const getVhdVersion = (major, minor) => (major << 16) | (minor & 0x0000FFFF)
 
 // bytes[] bit manipulation
-const createBitmap = bits => Buffer.alloc(Math.ceil(bits / 3))
 const testBit = (map, bit) => map[bit >> 3] & 1 << (bit & 7)
 const setBit = (map, bit) => {
   map[bit >> 3] |= 1 << (bit & 7)
@@ -346,10 +345,7 @@ export default class Vhd {
     updateChecksum(fuFooter, buf)
     updateChecksum(fuHeader, buf, FOOTER_SIZE)
 
-    await Promise.all([
-      this._write(0, buf),
-      this._write()
-    ])
+    await this._write(0, buf)
 
     return this._initMetadata(header, footer)
   }
@@ -361,7 +357,6 @@ export default class Vhd {
     this._footer = footer
     this._header = header
     this._sectorsPerBlock = sectorsPerBlock
-    this._structBlockAllocationTable = uint32ToUint64(header.maxTableEntries)
 
     if (footer.diskType === HARD_DISK_TYPE_DIFFERENCING) {
       const parent = new Vhd(
@@ -379,21 +374,21 @@ export default class Vhd {
 
   async readBlockAllocationTable () {
     const { maxTableEntries, tableOffset } = this._header
-    const structBlockAllocationTable = this._structBlockAllocationTable
+    const fuTable = fu.uint32(maxTableEntries)
 
     this._blockAllocationTable = unpack(
-      structBlockAllocationTable,
-      await this._read(uint32ToUint64(tableOffset), structBlockAllocationTable.size)
+      fuTable,
+      await this._read(uint32ToUint64(tableOffset), fuTable.size)
     )
   }
 
   writeBlockAllocationTable (table) {
     const { maxTableEntries, tableOffset } = this._header
-    const structBlockAllocationTable = this._structBlockAllocationTable
+    const fuTable = fu.uint32(maxTableEntries)
 
     return this._write(
       uint32ToUint64(tableOffset),
-      structBlockAllocationTable.pack(table)
+      fuTable.pack(table)
     ).then(() => {
       this._blockAllocationTable = table
     })
@@ -401,40 +396,12 @@ export default class Vhd {
 
   // -----------------------------------------------------------------
 
-  // allocate a new block in the given table
-  async _allocateBlock (table, blockId) {
-    const { maxTableEntries, tableOffset } = this._header
-
-    // find the highest first sector of used blocks
-    let maxSector = 0
-    for (let i = 0; i < maxTableEntries; ++i) {
-      const blockSector = table[i]
-      if (blockSector !== 0xFFFFFFFF && blockSector > maxSector) {
-        maxSector = blockSector
-      }
-    }
-
-    table[blockId] = maxSector
-      ? maxSector + this._sectorsPerBlock
-      : Math.ceil(
-        (uint32ToUint64(tableOffset) + this._structBlockAllocationTable.size) / SECTOR_SIZE
-      )
-  }
-
-  // async _readBlockSectors (block, sectorsToRead, beginByte, endByte, buf, offset) {
-  //   const blockAddr = this._getBlockAddress(block)
-  //   if (!blockAddr) {
-  //     for
-  //   }
-
-  //   const blockBitmapSize = this._blockBitmapSize
-  //   const bitmap = await this._read(blockAddr, blockBitmapSize)
-  // }
-
   _readBlock (block, begin, length, buf, offset) {
     assert(begin >= 0)
     assert(length > 0)
-    assert(begin + length <= this._header.blockSize)
+
+    const { blockSize } = this._header
+    assert(begin + length <= blockSize)
 
     const parent = this._parent
 
@@ -445,8 +412,6 @@ export default class Vhd {
         : this._zeroes(length, buf, offset)
     }
 
-    const { blockSize } = this._header
-
     const blockBitmapSize = this._blockBitmapSize
 
     if (!parent) { // non differencing
@@ -454,18 +419,6 @@ export default class Vhd {
     }
 
     throw new Error('not implemented')
-
-    // const [ beginSector, beginByte ] = div(begin, SECTOR_SIZE)
-    // const [ endSector, endByte ] = div(begin + length - 1, SECTOR_SIZE)
-
-    // const multiranges = []
-    // for (let sector = beginSector; sector <= endSector; ++sector) {
-
-    //   const
-    //   while ()
-    // }
-
-    // return this._readBlockSectors(block, sectorsToRead, beginByte, endByte, buf, offset)
   }
 
   // Read a sector.
@@ -493,10 +446,10 @@ export default class Vhd {
     return parent.readSector(sector, buf, offset)
   }
 
-  read (buffer, begin, length = buffer.length) {
-    assert(Buffer.isBuffer(buffer))
+  read (buf, begin, length = buf.length) {
+    assert(Buffer.isBuffer(buf))
     assert(begin >= 0)
-    assert(length <= buffer.length)
+    assert(length <= buf.length)
 
     const { size } = this
     if (begin >= size) {
@@ -506,23 +459,13 @@ export default class Vhd {
     const end = Math.min(size, begin + length)
 
     const { blockSize } = this._header
-    const [ beginBlock, beginOffsetInBlock ] = div(begin, blockSize)
-    const [ endBlock, endOffsetInBlock ] = div(end - 1, blockSize)
+    const [ block, beginInBlock ] = div(begin, blockSize)
 
-    const promises = []
-    for (let block = beginBlock; block <= endBlock; ++block) {
-      const beginInBlock = block === beginBlock ? beginOffsetInBlock : 0
-      const endInBlock = block === endBlock ? endOffsetInBlock + 1 : blockSize
-      promises.push(this._readBlock(
-        block,
-        beginInBlock,
-        endInBlock - beginInBlock,
-        buffer,
-        block === beginBlock
-          ? 0
-          : (block - beginBlock) * blockSize - beginOffsetInBlock
-      ))
-    }
-    return Promise.all(promises).then(() => end - begin)
+    return this._readBlock(
+      block,
+      beginInBlock,
+      Math.min(length, blockSize - beginInBlock),
+      buf
+    )
   }
 }

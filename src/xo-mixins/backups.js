@@ -1,14 +1,8 @@
 import deferrable from 'golike-defer'
-import endsWith from 'lodash/endsWith'
 import escapeStringRegexp from 'escape-string-regexp'
 import eventToPromise from 'event-to-promise'
 import execa from 'execa'
-import filter from 'lodash/filter'
-import find from 'lodash/find'
-import findIndex from 'lodash/findIndex'
-import sortBy from 'lodash/sortBy'
 import splitLines from 'split-lines'
-import startsWith from 'lodash/startsWith'
 import { createParser as createPairsParser } from 'parse-pairs'
 import { createReadStream, readdir } from 'fs'
 import { satisfies as versionSatisfies } from 'semver'
@@ -17,16 +11,25 @@ import {
   basename,
   dirname
 } from 'path'
+import {
+  endsWith,
+  filter,
+  find,
+  findIndex,
+  once,
+  sortBy,
+  startsWith
+} from 'lodash'
 
 import vhdMerge, { chainVhd } from '../vhd-merge'
 import vhdMount from '../vhd-mount'
 import xapiObjectToXo from '../xapi-object-to-xo'
 import {
   forEach,
-  fromCallback,
   mapToArray,
   noop,
   pCatch,
+  pFromCallback,
   pSettle,
   resolveSubpath,
   safeDateFormat,
@@ -116,6 +119,42 @@ async function checkFileIntegrity (handler, name) {
   //  stream.resume()
   //  await eventToPromise(stream, 'finish')
 }
+
+// -------------------------------------------------------------------
+
+const listPartitions = (() => {
+  const parseLine = createPairsParser({
+    keyTransform: key => key === 'UUID'
+      ? 'id'
+      : key.toLowerCase(),
+    valueTransform: (value, key) => key === 'start' || key === 'size'
+      ? +value
+      : value
+  })
+
+  return device => execa('partx', [
+    '--bytes',
+    '--output=NR,START,SIZE,NAME,UUID,TYPE',
+    '--pairs',
+    device.path
+  ]).then(({ stdout }) => mapToArray(splitLines(stdout), parseLine))
+})()
+
+const mountPartition = (device, partitionId) => Promise.all([
+  listPartitions(device),
+  tmpDir()
+]).then(([ partitions, path ]) => {
+  const { start } = find(partitions, { id: partitionId })
+
+  return execa('mount', [
+    `--options=loop,offset=${start * 512},ro,noload`,
+    `--source=${device.path}`,
+    `--target=${path}`
+  ]).then(() => ({
+    path,
+    unmount: once(() => execa('umount', [ '--lazy', path ]))
+  }))
+})
 
 // ===================================================================
 
@@ -825,62 +864,58 @@ export default class {
 
   // -----------------------------------------------------------------
 
-  _mountVhd (remoteId, diskPath) {
+  _mountVhd (remoteId, vhdPath) {
     return Promise.all([
       this._xo.getRemoteHandler(remoteId),
       tmpDir()
     ]).then(([ handler, mountDir ]) =>
-      vhdMount(mountDir, handler, diskPath).then(unmount =>
-        ({ unmount, mountDir })
-      )
+      vhdMount(mountDir, handler, vhdPath).then(unmount => ({
+        path: `${mountDir}/device`,
+        unmount
+      }))
+    )
+  }
+
+  _mountPartition (remoteId, vhdPath, partitionId) {
+    return this._mountVhd(remoteId, vhdPath).then(device =>
+      mountPartition(device, partitionId).then(partition => ({
+        ...partition,
+        unmount: () => partition.unmount().then(device.unmount)
+      }))
     )
   }
 
   @deferrable
-  async scanDiskBackup ($defer, remoteId, disk) {
-    const { unmount, mountDir } = await this._mountVhd(remoteId, disk)
-    $defer(unmount)
-
-    const { stdout } = await execa('partx', [
-      '--bytes',
-      '--output=NR,START,SIZE,NAME,UUID,TYPE',
-      '--pairs',
-      mountDir
-    ])
-
-    const parsePairs = createPairsParser({
-      keyTransform: key => key.toLowerCase(),
-      valueTransform: (value, key) => key === 'start' || key === 'size'
-        ? +value
-        : value
-    })
+  async scanDiskBackup ($defer, remoteId, vhdPath) {
+    const device = await this._mountVhd(remoteId, vhdPath)
+    $defer(device.unmount)
 
     return {
-      partitions: mapToArray(splitLines(stdout), parsePairs)
+      partitions: await listPartitions(device)
     }
   }
 
   @deferrable
-  async scanFilesInDiskBackup ($defer, remoteId, diskPath, partition, path) {
-    const { unmount, mountDir } = await this._mountVhd(remoteId, diskPath)
-    $defer(unmount)
+  async scanFilesInDiskBackup ($defer, remoteId, vhdPath, partitionId, path) {
+    const partition = await this._mountPartition(remoteId, vhdPath, partitionId)
+    $defer(partition.unmount)
 
-    return fromCallback(cb => readdir(resolveSubpath(mountDir, path)))
+    return pFromCallback(cb => readdir(resolveSubpath(partition.path, path), cb))
   }
 
   @deferrable
-  async fetchFilesInDiskBackup ($defer, remoteId, diskPath, partition, paths) {
-    const { unmount, mountDir } = await this._mountVhd(remoteId, diskPath)
+  async fetchFilesInDiskBackup ($defer, remoteId, vhdPath, partitionId, paths) {
+    const partition = await this._mountPartition(remoteId, vhdPath, partitionId)
 
     let i = 0
     const onEnd = () => {
       if (!--i) {
-        unmount()
+        partition.unmount()
       }
     }
     return mapToArray(paths, path => {
       ++i
-      return createReadStream(resolveSubpath(mountDir, path)).once('end', onEnd)
+      return createReadStream(resolveSubpath(partition.path, path)).once('end', onEnd)
     })
   }
 }

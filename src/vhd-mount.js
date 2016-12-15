@@ -3,7 +3,7 @@ import fuse from 'fuse-bindings'
 import { forEach, get, isPlainObject, once } from 'lodash'
 import { fromCallback } from 'promise-toolbox'
 
-import Vhd from './vhd'
+import Vhd, { SECTOR_SIZE } from './vhd'
 
 const {
   S_IFDIR,
@@ -12,19 +12,19 @@ const {
   S_IXUSR
 } = fs.constants
 
-export default async (dir, remoteHandler, path, { verbose } = {}) => {
-  await fromCallback(cb => fs.mkdir(dir, cb)).catch(error => {
+export default async (mountDir, remoteHandler, vhdPath, { verbose } = {}) => {
+  await fromCallback(cb => fs.mkdir(mountDir, cb)).catch(error => {
     if (error && error.code !== 'EEXIST') {
       throw error
     }
   })
 
-  const vhd = new Vhd(remoteHandler, path)
+  const vhd = new Vhd(remoteHandler, vhdPath)
   await vhd.readHeaderAndFooter()
   await vhd.readBlockAllocationTable()
 
   const entries = {
-    vhdi1: vhd
+    device: vhd
   }
   const getEntry = path => {
     if (path === '/') {
@@ -36,7 +36,7 @@ export default async (dir, remoteHandler, path, { verbose } = {}) => {
   const isDirectory = entry => isPlainObject(entry)
   const isFile = entry => entry && !isPlainObject(entry)
 
-  let operations = {
+  const operations = {
     readdir (path, cb) {
       const entry = getEntry(path)
       if (isDirectory(entry)) {
@@ -84,7 +84,7 @@ export default async (dir, remoteHandler, path, { verbose } = {}) => {
     },
     statfs (path, cb) {
       cb(0, {
-        bsize: 512
+        bsize: SECTOR_SIZE
       })
     }
   }
@@ -121,7 +121,7 @@ export default async (dir, remoteHandler, path, { verbose } = {}) => {
     }
   })
 
-  await fromCallback(cb => fuse.mount(dir, operations, cb))
+  await fromCallback(cb => fuse.mount(mountDir, operations, cb))
 
-  return once(() => fromCallback(cb => fuse.unmount(dir, cb)))
+  return once(() => fromCallback(cb => fuse.unmount(mountDir, cb)))
 }
