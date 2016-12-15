@@ -1,6 +1,6 @@
 import assert from 'assert'
 import fu from '@nraynaud/struct-fu'
-import { dirname, resolve } from 'path'
+import { dirname } from 'path'
 
 // ===================================================================
 //
@@ -361,7 +361,7 @@ export default class Vhd {
     if (footer.diskType === HARD_DISK_TYPE_DIFFERENCING) {
       const parent = new Vhd(
         this._handler,
-        resolve(dirname(this._path), header.parentUnicodeName)
+        `${dirname(this._path)}/${header.parentUnicodeName}`
       )
       await parent.readHeaderAndFooter()
       await parent.readBlockAllocationTable()
@@ -396,6 +396,33 @@ export default class Vhd {
 
   // -----------------------------------------------------------------
 
+  // read a single sector in a block
+  async _readBlockSector (block, sector, begin, length, buf, offset) {
+    assert(begin >= 0)
+    assert(length > 0)
+    assert(begin + length <= SECTOR_SIZE)
+
+    const blockAddr = this._getBlockAddress(block)
+    if (blockAddr) {
+      const blockBitmapSize = this._blockBitmapSize
+
+      const bitmap = await this._read(blockAddr, blockBitmapSize)
+      if (testBit(bitmap, sector)) {
+        return this._read(
+          blockAddr + blockBitmapSize + sector * SECTOR_SIZE + begin,
+          length,
+          buf,
+          offset
+        )
+      }
+    }
+
+    const parent = this._parent
+    return parent
+      ? parent._readBlockSector(block, sector, begin, length, buf, offset)
+      : this._zeroes(length, buf, offset)
+  }
+
   _readBlock (block, begin, length, buf, offset) {
     assert(begin >= 0)
     assert(length > 0)
@@ -412,16 +439,23 @@ export default class Vhd {
         : this._zeroes(length, buf, offset)
     }
 
-    const blockBitmapSize = this._blockBitmapSize
-
-    if (!parent) { // non differencing
-      return this._read(blockAddr + blockBitmapSize + begin, length, buf, offset)
+    if (!parent) {
+      return this._read(blockAddr + this._blockBitmapSize + begin, length, buf, offset)
     }
 
-    throw new Error('not implemented')
+    // FIXME: we should read as many sector in a single pass as
+    // possible for maximum perf.
+    const [ sector, offsetInSector ] = div(block, this._sectorsPerBlock)
+    return this._readBlockSector(
+      block,
+      sector,
+      offsetInSector,
+      Math.min(length, SECTOR_SIZE - offsetInSector),
+      buf,
+      offset
+    )
   }
 
-  // Read a sector.
   async readSector (sector, buf, offset) {
     const [ block, sectorInBlock ] = div(sector, this._sectorsPerBlock)
 
