@@ -70,7 +70,7 @@ const fuHeader = fu.struct([
   ]),
   fu.uint32('headerVersion'),
   fu.uint32('maxTableEntries'), // Max entries in the Block Allocation Table.
-  fu.uint32('blockSize'), // Block size in bytes. Default (2097152 => 2MB)
+  fu.uint32('blockSize'), // Block size (without bitmap) in bytes.
   fu.uint32('checksum'),
   fu.uint8('parentUuid', 16),
   fu.uint32('parentTimestamp'),
@@ -174,12 +174,14 @@ const streamToExistingBuffer = (
   let i = offset
 
   const onData = chunk => {
-    if (i >= end) {
+    const prev = i
+    i += chunk.length
+
+    if (i > end) {
       return onError(new Error('too much data'))
     }
 
-    const n = Math.min(end - i, chunk.length)
-    i += chunk.copy(buffer, i, 0, n)
+    chunk.copy(buffer, prev)
   }
   stream.on('data', onData)
 
@@ -219,10 +221,6 @@ const computeChecksum = (struct, buf, offset = 0) => {
   return ~sum >>> 0
 }
 
-const updateChecksum = (struct, buf, offset) => {
-  pack(struct.fields.checksum, computeChecksum(struct, buf, offset), buf, offset)
-}
-
 const verifyChecksum = (struct, buf, offset) =>
   unpack(struct.fields.checksum, buf, offset) === computeChecksum(struct, buf, offset)
 
@@ -243,8 +241,6 @@ const getParentLocatorSize = parentLocatorEntry => {
 // Euclidean division, returns the quotient and the remainder of a / b.
 const div = (a, b) => [ Math.floor(a / b), a % b ]
 
-const wrap = value => () => value
-
 export default class Vhd {
   constructor (handler, path) {
     this._handler = handler
@@ -256,10 +252,6 @@ export default class Vhd {
     this._header = null
     this._parent = null
     this._sectorsPerBlock = null
-  }
-
-  get size () {
-    return uint32ToUint64(this._footer.currentSize)
   }
 
   // Read `length` bytes starting from `begin`.
@@ -300,21 +292,13 @@ export default class Vhd {
 
   // Return the position of a block in the VHD or undefined if not found.
   _getBlockAddress (block) {
-    if (block < this._header.maxTableEntries) {
-      const blockAddr = this._blockAllocationTable[block]
-      if (blockAddr !== 0xFFFFFFFF) {
-        return blockAddr * SECTOR_SIZE
-      }
-    }
-  }
+    assert(block >= 0)
+    assert(block < this._header.maxTableEntries)
 
-  _write (begin, buf) {
-    return this._handler.createOutputStream(this._path, {
-      start: begin
-    }).then(stream => new Promise((resolve, reject) => {
-      stream.once('error', reject)
-      stream.end(buf, resolve)
-    }))
+    const blockAddr = this._blockAllocationTable[block]
+    if (blockAddr !== 0xFFFFFFFF) {
+      return blockAddr * SECTOR_SIZE
+    }
   }
 
   // -----------------------------------------------------------------
@@ -336,27 +320,17 @@ export default class Vhd {
     )
   }
 
-  async writeHeaderAndFooter (header, footer) {
-    const buf = Buffer.allocUnsafe(FOOTER_SIZE + HEADER_SIZE)
-
-    pack(footer, buf)
-    pack(header, buf, FOOTER_SIZE)
-
-    updateChecksum(fuFooter, buf)
-    updateChecksum(fuHeader, buf, FOOTER_SIZE)
-
-    await this._write(0, buf)
-
-    return this._initMetadata(header, footer)
-  }
-
   async _initMetadata (header, footer) {
-    const sectorsPerBlock = Math.floor(header.blockSize / SECTOR_SIZE)
+    const sectorsPerBlock = header.blockSize / SECTOR_SIZE
+    assert(sectorsPerBlock % 1 === 0)
 
-    this._blockBitmapSize = Math.ceil(sectorsPerBlock / 8) // 1 bit per sector
+     // 1 bit per sector, rounded up to full sectors
+    this._blockBitmapSize = Math.ceil(sectorsPerBlock / 8 / SECTOR_SIZE) * SECTOR_SIZE
+    assert(this._blockBitmapSize === SECTOR_SIZE)
+
     this._footer = footer
     this._header = header
-    this._sectorsPerBlock = sectorsPerBlock
+    this.size = uint32ToUint64(this._footer.currentSize)
 
     if (footer.diskType === HARD_DISK_TYPE_DIFFERENCING) {
       const parent = new Vhd(
@@ -382,18 +356,6 @@ export default class Vhd {
     )
   }
 
-  writeBlockAllocationTable (table) {
-    const { maxTableEntries, tableOffset } = this._header
-    const fuTable = fu.uint32(maxTableEntries)
-
-    return this._write(
-      uint32ToUint64(tableOffset),
-      fuTable.pack(table)
-    ).then(() => {
-      this._blockAllocationTable = table
-    })
-  }
-
   // -----------------------------------------------------------------
 
   // read a single sector in a block
@@ -404,6 +366,7 @@ export default class Vhd {
 
     const blockAddr = this._getBlockAddress(block)
     if (blockAddr) {
+      // FIXME: do not check bitmap for plain VHD.
       const blockBitmapSize = this._blockBitmapSize
 
       const bitmap = await this._read(blockAddr, blockBitmapSize)
@@ -430,43 +393,44 @@ export default class Vhd {
     const { blockSize } = this._header
     assert(begin + length <= blockSize)
 
-    const parent = this._parent
-
     const blockAddr = this._getBlockAddress(block)
-    if (!blockAddr) {
-      return parent
-        ? parent._readBlock(block, begin, length, buf, offset)
-        : this._zeroes(length, buf, offset)
-    }
+    return blockAddr
+      ? this._read(blockAddr + this._blockBitmapSize + begin, length, buf, offset)
+      : this._zeroes(length, buf, offset)
 
-    if (!parent) {
-      return this._read(blockAddr + this._blockBitmapSize + begin, length, buf, offset)
-    }
+    // const parent = this._parent
+
+    // if (!blockAddr) {
+    //   return parent
+    //     ? parent._readBlock(block, begin, length, buf, offset)
+    //     : this._zeroes(length, buf, offset)
+    // }
+
+    // if (!parent) {
+    //   return this._read(blockAddr + this._blockBitmapSize + begin, length, buf, offset)
+    // }
 
     // FIXME: we should read as many sectors in a single pass as
     // possible for maximum perf.
-    const [ sector, offsetInSector ] = div(begin, SECTOR_SIZE)
+    const [ sector, beginInSector ] = div(begin, SECTOR_SIZE)
     return this._readBlockSector(
       block,
       sector,
-      offsetInSector,
-      Math.min(length, SECTOR_SIZE - offsetInSector),
+      beginInSector,
+      Math.min(length, SECTOR_SIZE - beginInSector),
       buf,
       offset
     )
   }
 
-  read (buf, begin, length = buf.length) {
+  read (buf, begin, length = buf.length, offset) {
     assert(Buffer.isBuffer(buf))
     assert(begin >= 0)
-    assert(length <= buf.length)
 
     const { size } = this
     if (begin >= size) {
       return Promise.resolve(0)
     }
-
-    const end = Math.min(size, begin + length)
 
     const { blockSize } = this._header
     const [ block, beginInBlock ] = div(begin, blockSize)
@@ -474,8 +438,13 @@ export default class Vhd {
     return this._readBlock(
       block,
       beginInBlock,
-      Math.min(length, blockSize - beginInBlock),
-      buf
-    )
+      Math.min(length, blockSize - beginInBlock, size - begin),
+      buf,
+      offset
+    ).then(actualLength => {
+      assert(actualLength)
+
+      return actualLength
+    })
   }
 }

@@ -912,8 +912,7 @@ export default class {
     return entriesMap
   }
 
-  @deferrable
-  async fetchFilesInDiskBackup ($defer, remoteId, vhdPath, partitionId, paths) {
+  async fetchFilesInDiskBackup (remoteId, vhdPath, partitionId, paths) {
     const partition = await this._mountPartition(remoteId, vhdPath, partitionId)
 
     let i = 0
