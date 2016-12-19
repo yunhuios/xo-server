@@ -5,12 +5,10 @@ import { fromCallback } from 'promise-toolbox'
 
 import Vhd, { SECTOR_SIZE } from './vhd'
 
-const {
-  S_IFDIR,
-  S_IFREG,
-  S_IRUSR,
-  S_IXUSR
-} = fs.constants
+const S_IFDIR = 1 << 14
+const S_IFREG = 1 << 15
+const S_IRUSR = 1 << 8
+const S_IXUSR = 1 << 6
 
 export default async (mountDir, remoteHandler, vhdPath, { verbose } = {}) => {
   await fromCallback(cb => fs.mkdir(mountDir, cb)).catch(error => {
