@@ -1,7 +1,6 @@
 import base64url from 'base64url'
 import eventToPromise from 'event-to-promise'
 import forEach from 'lodash/forEach'
-import getStream from 'get-stream'
 import has from 'lodash/has'
 import highland from 'highland'
 import humanFormat from 'human-format'
@@ -57,7 +56,7 @@ export function bufferToStream (buf) {
   return stream
 }
 
-export const streamToBuffer = getStream.buffer
+export streamToBuffer from './stream-to-new-buffer'
 
 // -------------------------------------------------------------------
 
@@ -167,7 +166,7 @@ export const validChecksumOfReadStream = (stream, expectedChecksum) => {
       const checksum = `$${algorithmId}$$${hash.digest('hex')}`
 
       callback(
-        checksum !== expectedChecksum
+        checksum.trim() !== expectedChecksum.trim()
           ? new Error(`Bad checksum (${checksum}), expected: ${expectedChecksum}`)
           : null
       )

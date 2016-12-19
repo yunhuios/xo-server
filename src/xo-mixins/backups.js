@@ -132,15 +132,15 @@ const listPartitions = (() => {
       : value
   })
 
-  return device => execa('partx', [
+  return device => execa.stdout('partx', [
     '--bytes',
     '--output=NR,START,SIZE,NAME,UUID,TYPE',
     '--pairs',
     device.path
-  ]).then(({ stdout }) => filter(
+  ]).then(stdout => filter(
     mapToArray(splitLines(stdout), parseLine),
     ({ type }) => (
-      type !== '0x5' || //  do not expose extended partition
+      type !== '0x5' && //  do not expose extended partition
       type !== '0x82' // do not expose swap
     )
   ))

@@ -2,6 +2,10 @@ import assert from 'assert'
 import fu from '@nraynaud/struct-fu'
 import { dirname } from 'path'
 
+import streamToExistingBuffer from './stream-to-existing-buffer'
+import streamToNewBuffer from './stream-to-new-buffer'
+import { generateUnsecureToken } from './utils'
+
 // ===================================================================
 //
 // Spec:
@@ -134,87 +138,6 @@ const unpack = (field, buf, offset) =>
 
 // ===================================================================
 
-const streamToNewBuffer = stream => new Promise((resolve, reject) => {
-  const chunks = []
-  let length = 0
-
-  const onData = chunk => {
-    chunks.push(chunk)
-    length += chunk.length
-  }
-  stream.on('data', onData)
-
-  const clean = () => {
-    stream.removeListener('data', onData)
-    stream.removeListener('end', onEnd)
-    stream.removeListener('error', onError)
-  }
-  const onEnd = () => {
-    resolve(Buffer.concat(chunks, length))
-    clean()
-  }
-  stream.on('end', onEnd)
-  const onError = error => {
-    reject(error)
-    clean()
-  }
-  stream.on('error', onError)
-})
-
-let nextStreamId = 0
-
-const streamToExistingBuffer = (
-  stream,
-  buffer,
-  offset = 0,
-  end = buffer.length
-) => new Promise((resolve, reject) => {
-  assert(offset >= 0)
-  assert(end > offset)
-  assert(end <= buffer.length)
-
-  let id = nextStreamId++
-  console.log('stream %s: to existing buffer', i)
-
-  let i = offset
-
-  const onData = chunk => {
-    console.log('stream %s: onData(%s)', id, chunk.length)
-
-    const prev = i
-    i += chunk.length
-
-    if (i > end) {
-      return onError(new Error('too much data'))
-    }
-
-    chunk.copy(buffer, prev)
-  }
-  stream.on('data', onData)
-
-  const clean = () => {
-    stream.removeListener('data', onData)
-    stream.removeListener('end', onEnd)
-    stream.removeListener('error', onError)
-  }
-  const onEnd = () => {
-    console.log('stream %s: onEnd()', id)
-
-    resolve(i - offset)
-    clean()
-  }
-  stream.on('end', onEnd)
-  const onError = error => {
-    console.log('stream %s: onEnd(%s)', id, error.message)
-
-    reject(error)
-    clean()
-  }
-  stream.on('error', onError)
-})
-
-// ===================================================================
-
 // Returns the checksum of a raw struct.
 const computeChecksum = (struct, buf, offset = 0) => {
   let sum = 0
@@ -274,11 +197,45 @@ export default class Vhd {
     assert(begin >= 0)
     assert(length > 0)
 
-    return this._handler.createReadStream(this._path, {
-      end: begin + length - 1,
+    const size = this._size
+
+    assert(begin < size)
+
+    const end = begin + length - 1
+    assert(end < size)
+
+    return this._handler._createReadStream(this._path, {
+      end,
       start: begin
     }).then(buf
-      ? stream => streamToExistingBuffer(stream, buf, offset, (offset || 0) + length)
+      ? stream => {
+        const id = generateUnsecureToken(3)
+
+        stream.once('end', (timeout => () => {
+          clearTimeout(timeout)
+        })(setTimeout(() => {
+          console.error('ERROR: this stream (%s) never ends!!!!!!', id)
+          console.error({
+            path: this._path,
+            size,
+            begin,
+            end
+          })
+        }, 1e4)))
+        stream.once('data', (timeout => () => {
+          clearTimeout(timeout)
+        })(setTimeout(() => {
+          console.error('ERROR: this stream (%s) has no data!!!!!!', id)
+          console.error({
+            path: this._path,
+            size,
+            begin,
+            end
+          })
+        }, 1e4)))
+
+        return streamToExistingBuffer(stream, buf, offset, (offset || 0) + length)
+      }
       : streamToNewBuffer
     )
   }
@@ -315,6 +272,8 @@ export default class Vhd {
   // -----------------------------------------------------------------
 
   async readHeaderAndFooter () {
+    this._size = await this._handler.getSize(this._path)
+
     const buf = await this._read(0, FOOTER_SIZE + HEADER_SIZE)
 
     if (!verifyChecksum(fuFooter, buf)) {
