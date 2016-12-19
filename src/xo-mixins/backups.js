@@ -137,7 +137,10 @@ const listPartitions = (() => {
     '--output=NR,START,SIZE,NAME,UUID,TYPE',
     '--pairs',
     device.path
-  ]).then(({ stdout }) => mapToArray(splitLines(stdout), parseLine))
+  ]).then(({ stdout }) => filter(
+    mapToArray(splitLines(stdout), parseLine),
+    partition => partition.type !== '0x5' //  do not expose extended partition
+  ))
 })()
 
 const mountPartition = (device, partitionId) => Promise.all([
@@ -145,7 +148,6 @@ const mountPartition = (device, partitionId) => Promise.all([
   tmpDir()
 ]).then(([ partitions, path ]) => {
   const partition = find(partitions, { id: partitionId })
-  console.log('mountPartition', partition)
   const { start } = partition
 
   return execa('mount', [
@@ -873,7 +875,6 @@ export default class {
   // -----------------------------------------------------------------
 
   _mountVhd (remoteId, vhdPath) {
-    console.log('_mountVhd')
     return Promise.all([
       this._xo.getRemoteHandler(remoteId),
       tmpDir()
@@ -899,8 +900,6 @@ export default class {
     const device = await this._mountVhd(remoteId, vhdPath)
     $defer(device.unmount)
 
-    console.log('scanDiskBackup')
-
     return {
       partitions: await listPartitions(device)
     }
@@ -910,7 +909,6 @@ export default class {
   async scanFilesInDiskBackup ($defer, remoteId, vhdPath, partitionId, path) {
     const partition = await this._mountPartition(remoteId, vhdPath, partitionId)
     $defer(partition.unmount)
-    console.log('scanFilesInDiskBackup')
 
     path = resolveSubpath(partition.path, path)
 

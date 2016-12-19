@@ -101,7 +101,7 @@ export default async (mountDir, remoteHandler, vhdPath, { verbose } = {}) => {
       const cb = args[i]
 
       if (verbose) {
-        const timeout = setTimeout(() => {
+        const timeout = setInterval(() => {
           console.error(
             '%s(%s) =?> [still running]',
             name,
@@ -110,7 +110,7 @@ export default async (mountDir, remoteHandler, vhdPath, { verbose } = {}) => {
         }, 1e3)
 
         args[i] = function (...results) {
-          clearTimeout(timeout)
+          clearInterval(timeout)
 
           console.error(
             '%s(%s) %s (%s)',
