@@ -40,7 +40,7 @@ scanFiles.params = {
 
 // -------------------------------------------------------------------
 
-const handleFetchFiles = (req, res, { remote, disk, partition, paths }) =>
+function handleFetchFiles (req, res, { remote, disk, partition, paths }) {
   this.fetchFilesInDiskBackup(remote, disk, partition, paths).then(files => {
     files[0].pipe(res)
   }).catch(error => {
@@ -50,6 +50,7 @@ const handleFetchFiles = (req, res, { remote, disk, partition, paths }) =>
       res.end(format.error(0, error))
     }
   })
+}
 
 export async function fetchFiles (params) {
   return this.registerHttpRequest(handleFetchFiles, params, {
