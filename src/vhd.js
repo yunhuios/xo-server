@@ -161,6 +161,8 @@ const streamToNewBuffer = stream => new Promise((resolve, reject) => {
   stream.on('error', onError)
 })
 
+let nextStreamId = 0
+
 const streamToExistingBuffer = (
   stream,
   buffer,
@@ -171,9 +173,14 @@ const streamToExistingBuffer = (
   assert(end > offset)
   assert(end <= buffer.length)
 
+  let id = nextStreamId++
+  console.log('stream %s: to existing buffer', i)
+
   let i = offset
 
   const onData = chunk => {
+    console.log('stream %s: onData(%s)', id, chunk.length)
+
     const prev = i
     i += chunk.length
 
@@ -191,11 +198,15 @@ const streamToExistingBuffer = (
     stream.removeListener('error', onError)
   }
   const onEnd = () => {
+    console.log('stream %s: onEnd()', id)
+
     resolve(i - offset)
     clean()
   }
   stream.on('end', onEnd)
   const onError = error => {
+    console.log('stream %s: onEnd(%s)', id, error.message)
+
     reject(error)
     clean()
   }

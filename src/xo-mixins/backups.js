@@ -139,7 +139,10 @@ const listPartitions = (() => {
     device.path
   ]).then(({ stdout }) => filter(
     mapToArray(splitLines(stdout), parseLine),
-    partition => partition.type !== '0x5' //  do not expose extended partition
+    ({ type }) => (
+      type !== '0x5' || //  do not expose extended partition
+      type !== '0x82' // do not expose swap
+    )
   ))
 })()
 
