@@ -144,16 +144,24 @@ const mountPartition = (device, partitionId) => Promise.all([
   listPartitions(device),
   tmpDir()
 ]).then(([ partitions, path ]) => {
-  const { start } = find(partitions, { id: partitionId })
+  const partition = find(partitions, { id: partitionId })
+  console.log('mountPartition', partition)
+  const { start } = partition
 
   return execa('mount', [
     `--options=loop,offset=${start * 512},ro,noload`,
     `--source=${device.path}`,
     `--target=${path}`
-  ]).then(() => ({
+  ], {
+    timeout: 1e4
+  }).then(() => ({
     path,
     unmount: once(() => execa('umount', [ '--lazy', path ]))
-  }))
+  })).catch(error => {
+    console.log(error)
+
+    throw error
+  })
 })
 
 // ===================================================================
@@ -865,11 +873,12 @@ export default class {
   // -----------------------------------------------------------------
 
   _mountVhd (remoteId, vhdPath) {
+    console.log('_mountVhd')
     return Promise.all([
       this._xo.getRemoteHandler(remoteId),
       tmpDir()
     ]).then(([ handler, mountDir ]) =>
-      vhdMount(mountDir, handler, vhdPath).then(unmount => ({
+      vhdMount(mountDir, handler, vhdPath, { verbose: true }).then(unmount => ({
         path: `${mountDir}/device`,
         unmount
       }))
@@ -890,6 +899,8 @@ export default class {
     const device = await this._mountVhd(remoteId, vhdPath)
     $defer(device.unmount)
 
+    console.log('scanDiskBackup')
+
     return {
       partitions: await listPartitions(device)
     }
@@ -899,6 +910,7 @@ export default class {
   async scanFilesInDiskBackup ($defer, remoteId, vhdPath, partitionId, path) {
     const partition = await this._mountPartition(remoteId, vhdPath, partitionId)
     $defer(partition.unmount)
+    console.log('scanFilesInDiskBackup')
 
     path = resolveSubpath(partition.path, path)
 
