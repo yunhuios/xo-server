@@ -42,13 +42,12 @@ scanFiles.params = {
 
 function handleFetchFiles (req, res, { remote, disk, partition, paths }) {
   this.fetchFilesInDiskBackup(remote, disk, partition, paths).then(files => {
+    res.setHeader('content-disposition', 'attachment')
     files[0].pipe(res)
   }).catch(error => {
     console.error(error)
-    if (!res.headersSent) {
-      res.writeHead(500)
-      res.end(format.error(0, error))
-    }
+    res.writeHead(500)
+    res.end(format.error(0, error))
   })
 }
 
