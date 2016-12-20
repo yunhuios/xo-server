@@ -133,7 +133,9 @@ const listPartitions = (() => {
   })
 
   const TYPES = {
-    0x83: 'linux'
+    0x7: 'NTFS',
+    0x83: 'linux',
+    0xc: 'FAT'
   }
 
   const parseLine = createPairsParser({
@@ -154,7 +156,7 @@ const listPartitions = (() => {
     device.path
   ]).then(stdout => filter(
     mapToArray(splitLines(stdout), parseLine),
-    ({ type }) => !IGNORED[+type]
+    ({ type }) => type != null && !IGNORED[+type]
   ))
 })()
 
