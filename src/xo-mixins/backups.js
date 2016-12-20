@@ -22,7 +22,6 @@ import {
 } from 'lodash'
 
 import vhdMerge, { chainVhd } from '../vhd-merge'
-import vhdMount from '../vhd-mount'
 import xapiObjectToXo from '../xapi-object-to-xo'
 import {
   forEach,
@@ -882,10 +881,29 @@ export default class {
       this._xo.getRemoteHandler(remoteId),
       tmpDir()
     ]).then(([ handler, mountDir ]) =>
-      vhdMount(mountDir, handler, vhdPath, { verbose: true }).then(unmount => ({
-        path: `${mountDir}/device`,
-        unmount
-      }))
+      execa('vhdimount', [ vhdPath, mountDir ]).then(() =>
+        pFromCallback(cb => readdir(mountDir, cb)).then(entries => {
+          let max = 0
+          forEach(entries, entry => {
+            const matches = /^vhdi(\d+)/.exec(entry)
+            if (matches) {
+              const value = +matches[1]
+              if (value > max) {
+                max = value
+              }
+            }
+          })
+
+          if (!max) {
+            throw new Error('no disks found')
+          }
+
+          return {
+            path: `${mountDir}/vhdi${max}`,
+            unmount: once(() => execa('fusermount', [ '-uz', mountDir ]))
+          }
+        })
+      )
     )
   }
 
