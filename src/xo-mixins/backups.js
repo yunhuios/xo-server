@@ -122,13 +122,29 @@ async function checkFileIntegrity (handler, name) {
 // -------------------------------------------------------------------
 
 const listPartitions = (() => {
+  const IGNORED = {}
+  forEach([
+    // https://github.com/jhermsmeier/node-mbr/blob/master/lib/partition.js#L38
+    0x05, 0x0F, 0x85, 0x15, 0x91, 0x9B, 0x5E, 0x5F, 0xCF, 0xD5, 0xC5,
+
+    0x82 // swap
+  ], type => {
+    IGNORED[type] = true
+  })
+
+  const TYPES = {
+    0x83: 'linux'
+  }
+
   const parseLine = createPairsParser({
     keyTransform: key => key === 'UUID'
       ? 'id'
       : key.toLowerCase(),
     valueTransform: (value, key) => key === 'start' || key === 'size'
       ? +value
-      : value
+      : key === 'type'
+        ? TYPES[+value] || value
+        : value
   })
 
   return device => execa.stdout('partx', [
@@ -138,10 +154,7 @@ const listPartitions = (() => {
     device.path
   ]).then(stdout => filter(
     mapToArray(splitLines(stdout), parseLine),
-    ({ type }) => (
-      type !== '0x5' && //  do not expose extended partition
-      type !== '0x82' // do not expose swap
-    )
+    ({ type }) => !IGNORED[+type]
   ))
 })()
 
@@ -150,10 +163,19 @@ const mountPartition = (device, partitionId) => Promise.all([
   tmpDir()
 ]).then(([ partitions, path ]) => {
   const partition = find(partitions, { id: partitionId })
-  const { start } = partition
+
+  const options = [
+    'loop',
+    `offset=${partition.start * 512}`,
+    'ro'
+  ]
+
+  if (partition.type === 'linux') {
+    options.push('noload')
+  }
 
   return execa('mount', [
-    `--options=loop,offset=${start * 512},ro,noload`,
+    `--options=${options.join(',')}`,
     `--source=${device.path}`,
     `--target=${path}`
   ], {
@@ -934,7 +956,10 @@ export default class {
 
   @deferrable
   async scanFilesInDiskBackup ($defer, remoteId, vhdPath, partitionId, path) {
-    const partition = await this._mountPartition(remoteId, vhdPath, partitionId)
+    const partition = await (partitionId == null
+      ? this._mountVhd(remoteId, vhdPath)
+      : this._mountPartition(remoteId, vhdPath, partitionId)
+    )
     $defer(partition.unmount)
 
     path = resolveSubpath(partition.path, path)
@@ -943,8 +968,10 @@ export default class {
 
     const entriesMap = {}
     await Promise.all(mapToArray(entries, async name => {
-      const stats = await pFromCallback(cb => stat(`${path}/${name}`, cb))
-      entriesMap[stats.isDirectory() ? `${name}/` : name] = {}
+      const stats = await pFromCallback(cb => stat(`${path}/${name}`, cb))::pCatch(noop)
+      if (stats) {
+        entriesMap[stats.isDirectory() ? `${name}/` : name] = {}
+      }
     }))
     return entriesMap
   }

@@ -34,7 +34,7 @@ scanFiles.permission = 'admin'
 scanFiles.params = {
   remote: { type: 'string' },
   disk: { type: 'string' },
-  partition: { type: 'string' },
+  partition: { type: 'string', optional: true },
   path: { type: 'string' }
 }
 
@@ -43,6 +43,7 @@ scanFiles.params = {
 function handleFetchFiles (req, res, { remote, disk, partition, paths }) {
   this.fetchFilesInDiskBackup(remote, disk, partition, paths).then(files => {
     res.setHeader('content-disposition', 'attachment')
+    res.setHeader('content-type', 'application/octet-stream')
     files[0].pipe(res)
   }).catch(error => {
     console.error(error)
