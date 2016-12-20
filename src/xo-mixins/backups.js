@@ -880,8 +880,14 @@ export default class {
     return Promise.all([
       this._xo.getRemoteHandler(remoteId),
       tmpDir()
-    ]).then(([ handler, mountDir ]) =>
-      execa('vhdimount', [ vhdPath, mountDir ]).then(() =>
+    ]).then(([ handler, mountDir ]) => {
+      if (!handler._getRealPath) {
+        throw new Error(`this remote is not supported`)
+      }
+
+      const remotePath = handler._getRealPath()
+
+      return execa('vhdimount', [ resolveSubpath(remotePath, vhdPath), mountDir ]).then(() =>
         pFromCallback(cb => readdir(mountDir, cb)).then(entries => {
           let max = 0
           forEach(entries, entry => {
@@ -904,7 +910,7 @@ export default class {
           }
         })
       )
-    )
+    })
   }
 
   _mountPartition (remoteId, vhdPath, partitionId) {
