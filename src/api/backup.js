@@ -62,7 +62,7 @@ fetchFiles.permission = 'admin'
 fetchFiles.params = {
   remote: { type: 'string' },
   disk: { type: 'string' },
-  partition: { type: 'string' },
+  partition: { type: 'string', optional: true },
   paths: {
     type: 'array',
     items: { type: 'string' },

@@ -161,19 +161,22 @@ const listPartitions = (() => {
 })()
 
 const mountPartition = (device, partitionId) => Promise.all([
-  listPartitions(device),
+  partitionId != null && listPartitions(device),
   tmpDir()
 ]).then(([ partitions, path ]) => {
-  const partition = find(partitions, { id: partitionId })
+  const partition = partitionId && find(partitions, { id: partitionId })
 
   const options = [
     'loop',
-    `offset=${partition.start * 512}`,
     'ro'
   ]
 
-  if (partition.type === 'linux') {
-    options.push('noload')
+  if (partition) {
+    options.push(`offset=${partition.start * 512}`)
+
+    if (partition.type === 'linux') {
+      options.push('noload')
+    }
   }
 
   return execa('mount', [
@@ -958,10 +961,7 @@ export default class {
 
   @deferrable
   async scanFilesInDiskBackup ($defer, remoteId, vhdPath, partitionId, path) {
-    const partition = await (partitionId == null
-      ? this._mountVhd(remoteId, vhdPath)
-      : this._mountPartition(remoteId, vhdPath, partitionId)
-    )
+    const partition = await this._mountPartition(remoteId, vhdPath, partitionId)
     $defer(partition.unmount)
 
     path = resolveSubpath(partition.path, path)
