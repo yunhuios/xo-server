@@ -4,7 +4,7 @@ import { fromCallback } from 'promise-toolbox'
 import { once } from 'lodash'
 
 const HTTP_REQUEST_VALIDITY = 1e3 * 60 * 60
-const warn = createLogger('web-server')
+const { warn } = createLogger('web-server')
 
 export default class WebServer {
   constructor (app, { webServer }) {
@@ -80,7 +80,7 @@ export default class WebServer {
         path += `/${encodeURI(token)}`
       }
 
-      registerHttpHandler(handler, {
+      this.registerHttpHandler(handler, {
         data,
         method,
         once: true,

@@ -80,7 +80,6 @@
     "test": "jest"
   },
   "babel": {
-    "comments": false,
     "plugins": [
       "lodash",
       "transform-decorators-legacy",
