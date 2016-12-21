@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 
-const { info, warning: warn } = require('log')('bootstrap')
+const { info, warn } = require('log').default('bootstrap')
 
 process.on('unhandledRejection', reason => {
   warn('possibly unhandled rejection', reason)

@@ -3,7 +3,7 @@ import { forEach, map, startsWith } from 'lodash'
 import { join } from 'path'
 import { readdir } from 'fs-promise'
 
-const { warning } = createLogger('plugins')
+const { warn } = createLogger('plugins')
 
 // ===================================================================
 

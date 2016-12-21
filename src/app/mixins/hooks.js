@@ -4,7 +4,7 @@ import { noop } from 'lodash'
 const makeSingletonEvent = (triggerEvent, postEvent) => function () {
   this[triggerEvent] = noop
 
-  return this::emitAsync(triggerEvent).then(() => {
+  return emitAsync.call(this, triggerEvent).then(() => {
     this.removeAllListeners(triggerEvent)
     this.emit(postEvent)
     this.removeAllListeners(postEvent)
@@ -16,7 +16,7 @@ export default {
   //
   // They normalize existing data, clear invalid entries, etc.
   clean () {
-    return this::emitAsync('clean')
+    return emitAsync.call(this, 'clean')
   },
 
   // Run *start* async listeners.

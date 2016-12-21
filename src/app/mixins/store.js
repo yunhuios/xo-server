@@ -1,6 +1,6 @@
 import generateId from 'cuid'
 import mkdirp from 'simple-mkdirp'
-import { catchPlus, tap } from 'promise-toolbox'
+import { pCatch, pTap } from 'promise-toolbox'
 import { join } from 'path'
 import { readFile, writeFile } from 'fs-promise'
 
@@ -14,13 +14,13 @@ export class Store {
 
       const promise = readFile(datafile)
         .then(JSON.parse)
-        ::catchPlus({ code: 'ENOENT' }, () => ({}))
-        ::tap(data => {
+        .catch(pCatch({ code: 'ENOENT' }, () => ({})))
+        .then(pTap(data => {
           app.on('stop', data =>
             mkdirp(datadir)
               .then(() => writeFile(datafile, JSON.stringify(data)))
           )
-        })
+        }))
 
       // Inline future accesses.
       this._get = () => promise
