@@ -172,19 +172,22 @@ const mountPartition = (device, partitionId) => Promise.all([
     'loop',
     'ro'
   ]
+  let type = 'auto'
 
   if (partition) {
     options.push(`offset=${partition.start * 512}`)
 
     if (partition.type === 'linux') {
       options.push('noload')
+      type = 'ext4'
     }
   }
 
   return execa('mount', [
     `--options=${options.join(',')}`,
     `--source=${device.path}`,
-    `--target=${path}`
+    `--target=${path}`,
+    `--types=${type}`
   ], {
     timeout: 1e4
   }).then(() => ({
